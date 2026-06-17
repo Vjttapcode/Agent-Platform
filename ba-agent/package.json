@@ -1,0 +1,43 @@
+{
+  "name": "ba-agent",
+  "version": "1.0.0",
+  "description": "Production-ready MVP Business Analyst Agent (Claude + Express + TypeScript)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "serve": "node dist/server.js",
+    "import": "tsx scripts/import-docx.ts",
+    "make-sample": "tsx scripts/make-sample-srs.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "keywords": [
+    "business-analyst",
+    "agent",
+    "claude",
+    "anthropic",
+    "brd",
+    "user-story"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google/genai": "^2.8.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mammoth": "^1.12.0",
+    "multer": "^2.2.0",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^22.10.5",
+    "@types/turndown": "^5.0.6",
+    "docx": "^9.7.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BA Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+      .prose-chat h1,.prose-chat h2,.prose-chat h3{font-weight:600;margin:.6em 0 .3em}
+      .prose-chat h1{font-size:1.25rem}.prose-chat h2{font-size:1.1rem}.prose-chat h3{font-size:1rem}
+      .prose-chat p{margin:.4em 0}.prose-chat ul,.prose-chat ol{margin:.4em 0 .4em 1.2em;list-style:revert}
+      .prose-chat li{margin:.15em 0}
+      .prose-chat table{border-collapse:collapse;margin:.6em 0;width:100%;font-size:.85rem}
+      .prose-chat th,.prose-chat td{border:1px solid #cbd5e1;padding:.35em .6em;text-align:left}
+      .prose-chat th{background:#f1f5f9}
+      .prose-chat code{background:#f1f5f9;padding:.1em .35em;border-radius:.25em;font-size:.85em}
+      .prose-chat pre{background:#0f172a;color:#e2e8f0;padding:.8em;border-radius:.5em;overflow:auto;margin:.6em 0}
+      .prose-chat pre code{background:transparent;color:inherit;padding:0}
+      .typing span{animation:blink 1.4s infinite both}.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+      @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+    </style>
+  </head>
+  <body class="h-full bg-slate-100 text-slate-800">
+    <div class="mx-auto flex h-full max-w-5xl flex-col">
+      <!-- Header -->
+      <header class="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-3 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 font-bold text-white">BA</div>
+          <div>
+            <h1 class="text-base font-semibold leading-tight">Business Analyst Agent</h1>
+            <p id="status" class="text-xs text-slate-500">connecting…</p>
+          </div>
+        </div>
+        <button id="resetBtn" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+          New session
+        </button>
+      </header>
+
+      <!-- Quick actions -->
+      <div class="flex flex-wrap gap-2 border-b border-slate-200 bg-white px-5 py-2">
+        <button data-prompt="Let's discuss a new product idea. Ask me what you need to know to get started." class="quick">💬 Chat</button>
+        <button data-prompt="Analyze the requirements for the product we've discussed. List functional & non-functional requirements, stakeholders, assumptions and risks." class="quick">🔍 Requirement Analysis</button>
+        <button data-prompt="Generate user stories (INVEST, with US-### ids) for what we've discussed so far." class="quick">📝 User Stories</button>
+        <button data-prompt="Write acceptance criteria (Given/When/Then, AC-### ids) for the user stories above." class="quick">✅ Acceptance Criteria</button>
+        <button data-prompt="Draft a Business Requirements Document (BRD) for the product we've discussed." class="quick">📄 BRD Draft</button>
+        <button data-prompt="What key information is still missing? Give me a prioritized list of clarifying questions." class="quick">❓ Missing Questions</button>
+        <button id="importBtn" class="quick" style="border-color:#86efac;background:#f0fdf4;color:#15803d">📎 Import SRS (.docx)</button>
+        <input id="fileInput" type="file" accept=".docx" style="display:none" />
+      </div>
+
+      <!-- Messages -->
+      <main id="messages" class="flex-1 space-y-4 overflow-y-auto px-5 py-6"></main>
+
+      <!-- Composer -->
+      <footer class="border-t border-slate-200 bg-white px-5 py-3">
+        <form id="composer" class="flex items-end gap-2">
+          <textarea id="input" rows="1" placeholder="Describe your feature, paste requirements, or ask a question…  (Enter to send, Shift+Enter for newline)"
+            class="max-h-40 flex-1 resize-none rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"></textarea>
+          <button id="sendBtn" type="submit"
+            class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
+            Send
+          </button>
+        </form>
+      </footer>
+    </div>
+
+    <style>
+      .quick{font-size:.8rem;border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:9999px;padding:.25rem .75rem}
+      .quick:hover{background:#e0e7ff}
+    </style>
+
+    <script>
+      const messagesEl = document.getElementById('messages');
+      const form = document.getElementById('composer');
+      const input = document.getElementById('input');
+      const sendBtn = document.getElementById('sendBtn');
+      const statusEl = document.getElementById('status');
+      const resetBtn = document.getElementById('resetBtn');
+
+      function bubble(role, html, opts = {}) {
+        const wrap = document.createElement('div');
+        wrap.className = 'flex ' + (role === 'user' ? 'justify-end' : 'justify-start');
+        const b = document.createElement('div');
+        b.className = role === 'user'
+          ? 'max-w-[80%] rounded-2xl rounded-br-sm bg-indigo-600 px-4 py-2.5 text-sm text-white whitespace-pre-wrap'
+          : 'prose-chat max-w-[85%] rounded-2xl rounded-bl-sm bg-white px-4 py-3 text-sm text-slate-800 shadow-sm ring-1 ring-slate-200';
+        if (opts.id) b.id = opts.id;
+        b.innerHTML = html;
+        wrap.appendChild(b);
+        messagesEl.appendChild(wrap);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return b;
+      }
+
+      function render(role, text) {
+        if (role === 'user') return bubble('user', escapeHtml(text));
+        return bubble('assistant', marked.parse(text));
+      }
+      function escapeHtml(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+      async function loadHistory() {
+        try {
+          const [h, health] = await Promise.all([
+            fetch('/api/history').then(r => r.json()),
+            fetch('/api/health').then(r => r.json()),
+          ]);
+          statusEl.textContent = health.hasApiKey
+            ? `${health.provider} · ${health.model} · ${health.skills.length} skills loaded`
+            : `⚠ no API key — set ${health.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} in .env`;
+          messagesEl.innerHTML = '';
+          if (!h.length) {
+            bubble('assistant', marked.parse(
+              "👋 **Hi, I'm your BA Agent.** Tell me about a feature or product and I'll help you with:\n\n" +
+              "- 🔍 Requirement analysis\n- 📝 User stories\n- ✅ Acceptance criteria\n- 📄 BRD drafts\n- ❓ The questions you still need to answer\n\n" +
+              "Use the buttons above or just start typing."));
+          } else {
+            h.forEach(m => render(m.role, m.content));
+          }
+        } catch {
+          statusEl.textContent = 'server unreachable';
+        }
+      }
+
+      async function send(text) {
+        render('user', text);
+        input.value = '';
+        autosize();
+        sendBtn.disabled = true;
+        const thinking = bubble('assistant', '<span class="typing text-slate-400"><span>●</span><span>●</span><span>●</span></span>');
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Request failed');
+          thinking.classList.add('prose-chat');
+          thinking.innerHTML = marked.parse(data.reply);
+        } catch (err) {
+          thinking.innerHTML = '<span class="text-red-600">⚠ ' + escapeHtml(err.message) + '</span>';
+        } finally {
+          sendBtn.disabled = false;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          input.focus();
+        }
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (text) send(text);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      });
+
+      function autosize() {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 160) + 'px';
+      }
+      input.addEventListener('input', autosize);
+
+      document.querySelectorAll('.quick[data-prompt]').forEach(btn =>
+        btn.addEventListener('click', () => { input.value = btn.dataset.prompt; input.focus(); autosize(); }));
+
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Start a new session? This clears the conversation memory.')) return;
+        await fetch('/api/reset', { method: 'POST' });
+        loadHistory();
+      });
+
+      // --- Import SRS (.docx) → convert → analyze ---
+      const importBtn = document.getElementById('importBtn');
+      const fileInput = document.getElementById('fileInput');
+      importBtn.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        fileInput.value = '';
+        render('user', '📎 Imported: ' + file.name);
+        sendBtn.disabled = true;
+        importBtn.disabled = true;
+        const status = bubble('assistant', '<span class="typing text-slate-400"><span>●</span><span>●</span><span>●</span></span> Converting…');
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const up = await fetch('/api/import', { method: 'POST', body: fd });
+          const upData = await up.json();
+          if (!up.ok) throw new Error(upData.error || 'Import failed');
+          status.innerHTML = marked.parse('✅ Converted **' + upData.name + '** (' + upData.chars.toLocaleString() + ' chars). Analyzing SRS…');
+          const an = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doc: upData.name }),
+          });
+          const anData = await an.json();
+          if (!an.ok) throw new Error(anData.error || 'Analyze failed');
+          status.classList.add('prose-chat');
+          status.innerHTML = marked.parse(anData.reply);
+        } catch (err) {
+          status.innerHTML = '<span class="text-red-600">⚠ ' + escapeHtml(err.message) + '</span>';
+        } finally {
+          sendBtn.disabled = false;
+          importBtn.disabled = false;
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+      });
+
+      loadHistory();
+    </script>
+  </body>
+</html>

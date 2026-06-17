@@ -1,0 +1,92 @@
+{
+  "name": "ba-agent-vscode",
+  "displayName": "BA Agent",
+  "description": "Business Analyst Agent inside VSCode — sidebar chat, requirement analysis, user stories, BRD, and review. Talks to your local BA Agent API.",
+  "version": "1.0.0",
+  "publisher": "ba-agent",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ba-agent/ba-agent-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "baAgentSidebar",
+          "title": "BA Agent",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "baAgentSidebar": [
+        {
+          "type": "webview",
+          "id": "baAgent.chatView",
+          "name": "Chat"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "baAgent.chat", "title": "Chat", "category": "BA" },
+      { "command": "baAgent.analyze", "title": "Analyze Requirement", "category": "BA" },
+      { "command": "baAgent.createUserStory", "title": "Create User Story", "category": "BA" },
+      { "command": "baAgent.generateBRD", "title": "Generate BRD", "category": "BA" },
+      { "command": "baAgent.review", "title": "Review Requirement", "category": "BA" },
+      { "command": "baAgent.sendSelection", "title": "Send Selected Text", "category": "BA" },
+      { "command": "baAgent.newSession", "title": "New Session (clear history)", "category": "BA" }
+    ],
+    "submenus": [
+      { "id": "baAgent.contextMenu", "label": "BA Agent" }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "submenu": "baAgent.contextMenu",
+          "group": "navigation@99",
+          "when": "editorTextFocus"
+        }
+      ],
+      "baAgent.contextMenu": [
+        { "command": "baAgent.analyze", "group": "1_ba@1" },
+        { "command": "baAgent.createUserStory", "group": "1_ba@2" },
+        { "command": "baAgent.generateBRD", "group": "1_ba@3" },
+        { "command": "baAgent.review", "group": "1_ba@4" },
+        { "command": "baAgent.sendSelection", "group": "2_ba@1" }
+      ],
+      "commandPalette": [
+        { "command": "baAgent.sendSelection", "when": "editorHasSelection" }
+      ]
+    },
+    "configuration": {
+      "title": "BA Agent",
+      "properties": {
+        "baAgent.apiUrl": {
+          "type": "string",
+          "default": "http://localhost:3000",
+          "description": "Base URL of your local BA Agent API. The extension always POSTs to <apiUrl>/chat."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.7.3"
+  }
+}

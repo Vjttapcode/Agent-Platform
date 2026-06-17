@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Keep the folder but ignore runtime conversation state
+memory/history.json
+
+# Imported / converted documents and generated samples
+documents/
+samples/
