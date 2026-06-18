@@ -9,3 +9,6 @@ memory/history.json
 # Imported / converted documents and generated samples
 documents/
 samples/
+
+# BMAD workflow artifacts (per-project living documents)
+workspace/

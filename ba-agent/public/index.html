@@ -32,9 +32,15 @@
             <p id="status" class="text-xs text-slate-500">connecting…</p>
           </div>
         </div>
-        <button id="resetBtn" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
-          New session
-        </button>
+        <div class="flex items-center gap-2">
+          <label for="modelSelect" class="text-xs text-slate-500">Model</label>
+          <select id="modelSelect" title="Choose which model answers"
+            class="max-w-[12rem] rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-indigo-500 focus:outline-none">
+          </select>
+          <button id="resetBtn" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50">
+            New session
+          </button>
+        </div>
       </header>
 
       <!-- Quick actions -->
@@ -77,6 +83,31 @@
       const sendBtn = document.getElementById('sendBtn');
       const statusEl = document.getElementById('status');
       const resetBtn = document.getElementById('resetBtn');
+      const modelSelect = document.getElementById('modelSelect');
+
+      // Populate the model picker from /api/models.
+      async function loadModels() {
+        try {
+          const data = await fetch('/api/models').then(r => r.json());
+          modelSelect.innerHTML = '';
+          if (!data.models || !data.models.length) {
+            const opt = document.createElement('option');
+            opt.value = ''; opt.textContent = '(no models — set an API key)';
+            modelSelect.appendChild(opt);
+            modelSelect.disabled = true;
+            return;
+          }
+          data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.id; opt.textContent = m.label;
+            if (m.id === data.default) opt.selected = true;
+            modelSelect.appendChild(opt);
+          });
+        } catch {
+          modelSelect.innerHTML = '<option value="">(models unavailable)</option>';
+        }
+      }
+      const selectedModel = () => modelSelect.value || undefined;
 
       function bubble(role, html, opts = {}) {
         const wrap = document.createElement('div');
@@ -106,8 +137,8 @@
             fetch('/api/health').then(r => r.json()),
           ]);
           statusEl.textContent = health.hasApiKey
-            ? `${health.provider} · ${health.model} · ${health.skills.length} skills loaded`
-            : `⚠ no API key — set ${health.provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'} in .env`;
+            ? `${health.provider} · ${health.skills.length} skills · pick a model above`
+            : `⚠ no API key for "${health.provider}" — set it in .env`;
           messagesEl.innerHTML = '';
           if (!h.length) {
             bubble('assistant', marked.parse(
@@ -132,7 +163,7 @@
           const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({ message: text, model: selectedModel() }),
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Request failed');
@@ -197,7 +228,7 @@
           const an = await fetch('/api/analyze', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ doc: upData.name }),
+            body: JSON.stringify({ doc: upData.name, model: selectedModel() }),
           });
           const anData = await an.json();
           if (!an.ok) throw new Error(anData.error || 'Analyze failed');
@@ -212,6 +243,7 @@
         }
       });
 
+      loadModels();
       loadHistory();
     </script>
   </body>

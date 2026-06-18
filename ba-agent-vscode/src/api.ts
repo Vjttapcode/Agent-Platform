@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { log } from './log';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -16,6 +17,7 @@ export function baseUrl(): string {
 
 /** POST <apiUrl>/chat  →  { reply } */
 export async function sendChat(message: string): Promise<string> {
+  log(`POST ${baseUrl()}/chat (${message.length} chars)`);
   const res = await fetch(`${baseUrl()}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -30,8 +32,11 @@ export async function sendChat(message: string): Promise<string> {
     }
     throw new Error(detail || `BA Agent responded with ${res.status} ${res.statusText}`);
   }
-  const data = (await res.json()) as { reply: string };
-  return data.reply ?? '';
+  const data = (await res.json()) as { reply?: unknown };
+  if (typeof data?.reply !== 'string') {
+    throw new Error('Unexpected response from BA Agent (no "reply" field).');
+  }
+  return data.reply;
 }
 
 /** GET <apiUrl>/history  →  ChatMessage[] */
@@ -41,14 +46,16 @@ export async function getHistory(): Promise<ChatMessage[]> {
     if (!res.ok) return [];
     const data = (await res.json()) as ChatMessage[];
     return Array.isArray(data) ? data : [];
-  } catch {
+  } catch (err) {
+    log('getHistory failed:', describeError(err));
     return [];
   }
 }
 
 /** POST <apiUrl>/reset */
 export async function resetHistory(): Promise<void> {
-  await fetch(`${baseUrl()}/reset`, { method: 'POST' });
+  const res = await fetch(`${baseUrl()}/reset`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Reset failed: ${res.status} ${res.statusText}`);
 }
 
 /** Turn any failure into a friendly, actionable message. */

@@ -1,11 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Project root. All loaders resolve paths relative to this.
- * npm scripts run from the project root, so process.cwd() is reliable.
+ * Derived from this file's location (this file lives in <root>/src or
+ * <root>/dist), so it is correct no matter what the current working directory
+ * is — important when the MCP server is launched by Claude Desktop / Code.
  */
-export const ROOT = process.cwd();
+export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export interface MarkdownDoc {
   name: string;
@@ -45,12 +48,12 @@ export function loadSection(dirPath: string, label: string): string {
   return docs.map((d) => `### ${label}: ${d.name}\n\n${d.content}`).join('\n\n');
 }
 
-/** The base system prompt (prompts/system.md). */
-export function loadSystemPrompt(): string {
-  return loadMarkdownFile(path.join(ROOT, 'prompts', 'system.md'));
+/** The base system prompt (prompts/system.md). baseDir defaults to the BA root. */
+export function loadSystemPrompt(baseDir: string = ROOT): string {
+  return loadMarkdownFile(path.join(baseDir, 'prompts', 'system.md'));
 }
 
 /** All team conventions (conventions/*.md). */
-export function loadConventions(): string {
-  return loadSection(path.join(ROOT, 'conventions'), 'Convention');
+export function loadConventions(baseDir: string = ROOT): string {
+  return loadSection(path.join(baseDir, 'conventions'), 'Convention');
 }

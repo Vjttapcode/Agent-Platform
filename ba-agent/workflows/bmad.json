@@ -1,0 +1,38 @@
+{
+  "name": "bmad",
+  "description": "BMAD method — Analysis → Planning → Solutioning → Implementation. A phase is runnable only when its agent is active (has prompts/system.md). Run one phase, review/edit the artifact, then run the next.",
+  "phases": [
+    {
+      "id": "analysis",
+      "label": "Analysis",
+      "agent": "ba",
+      "output": "brief.md",
+      "inputs": [],
+      "instruction": "You are the BMAD Analyst. Using your business-analyst skills (project-brief, success-metrics, market/competitor research as relevant), produce a PROJECT BRIEF for the product idea below. Follow your Project Brief skill structure exactly. Output a single clean Markdown document that will be handed to the PM to write the PRD."
+    },
+    {
+      "id": "planning",
+      "label": "Planning",
+      "agent": "pm",
+      "output": "prd.md",
+      "inputs": ["brief.md"],
+      "instruction": "You are the BMAD Product Manager. From the Project Brief, produce a PRD: overview, goals, functional requirements (FR-###), non-functional requirements (NFR-###), epics with user stories (US-###) and MoSCoW priorities, plus an acceptance-criteria outline. Output clean Markdown."
+    },
+    {
+      "id": "solutioning",
+      "label": "Solutioning",
+      "agent": "architect",
+      "output": "architecture.md",
+      "inputs": ["brief.md", "prd.md"],
+      "instruction": "You are the BMAD Architect. From the Brief and PRD, produce an architecture document: high-level design, components, data model, key technical decisions with rationale, NFR strategy, and risks. Output clean Markdown."
+    },
+    {
+      "id": "implementation",
+      "label": "Implementation",
+      "agent": "dev",
+      "output": "stories.md",
+      "inputs": ["prd.md", "architecture.md"],
+      "instruction": "You are the BMAD Scrum Master / Dev. Shard the PRD and architecture into implementable stories with clear acceptance criteria and tasks. Output clean Markdown (this is expanded into per-story execution in a later milestone)."
+    }
+  ]
+}

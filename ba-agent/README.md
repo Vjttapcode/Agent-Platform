@@ -45,10 +45,14 @@ Drop a new `*.md` file into `conventions/`, `knowledge/`, or `skills/` and it is
 
 Set `LLM_PROVIDER` in `.env`:
 
-| `LLM_PROVIDER` | Cost | Get a key |
-| -------------- | ---- | --------- |
-| `gemini` (default) | **Free tier** — just a Google account, no card | <https://aistudio.google.com/apikey> |
-| `anthropic`        | Paid — needs credits | <https://console.anthropic.com/settings/keys> |
+| `LLM_PROVIDER` | Model env | Cost | Get a key |
+| -------------- | --------- | ---- | --------- |
+| `tokenrouter` (default) | `TOKENROUTER_MODEL` (e.g. `minimax-m3`) | Paid — your TokenRouter account | TokenRouter dashboard |
+| `gemini`           | `GEMINI_MODEL` | **Free tier** — Google account, no card | <https://aistudio.google.com/apikey> |
+| `anthropic`        | `ANTHROPIC_MODEL` | Paid — needs credits | <https://console.anthropic.com/settings/keys> |
+
+`tokenrouter` works with any OpenAI-compatible gateway — set `TOKENROUTER_BASE_URL`,
+`TOKENROUTER_API_KEY`, and `TOKENROUTER_MODEL` in `.env`.
 
 To test for **free**, keep `LLM_PROVIDER=gemini` and set `GEMINI_API_KEY`.
 The BA logic (prompts, skills, knowledge, memory, UI) is identical either way —
@@ -134,9 +138,34 @@ Open <http://localhost:3000> and start chatting.
 | `npm start`        | Start the server once (`tsx`)                 |
 | `npm run build`    | Compile TypeScript to `dist/`                 |
 | `npm run serve`    | Run the compiled build (`node dist/server.js`)|
+| `npm run mcp`      | Run the MCP server (stdio) — see [MCP.md](MCP.md) |
+| `npm run mcp:smoke`| Smoke-test all MCP tools                      |
 | `npm run import`   | Convert a `.docx` to Markdown (CLI)           |
 | `npm run make-sample` | Generate a sample SRS `.docx` to try        |
 | `npm run typecheck`| Type-check without emitting                   |
+| `npm run lint`     | Lint with ESLint (typescript-eslint)          |
+
+---
+
+## Configuration
+
+All settings come from `.env` (read once in [`src/config.ts`](src/config.ts)):
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `LLM_PROVIDER` | `anthropic` | `tokenrouter` \| `gemini` \| `anthropic` |
+| `*_API_KEY` | — | Key for the active provider |
+| `*_MODEL` | per provider | Default model for that provider |
+| `TOKENROUTER_BASE_URL` | `https://api.tokenrouter.com/v1` | OpenAI-compatible gateway URL |
+| `TOKENROUTER_MODELS` | — | Extra model ids for the picker (comma-separated) |
+| `MAX_TOKENS` | `4096` | Max output tokens per reply |
+| `ANALYZE_MAX_TOKENS` | `8192` | Max output tokens for SRS/document analysis |
+| `MEMORY_WINDOW` | `40` | Recent messages sent back as memory |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warn` \| `error` |
+| `PORT` | `3000` | HTTP port |
+
+Logs are written to **stderr** (leveled, timestamped) via [`src/logger.ts`](src/logger.ts),
+including one line per HTTP request — safe for the MCP stdio transport.
 
 ---
 
@@ -192,6 +221,57 @@ npm run import -- "C:\path\to\your-srs.docx"
 Imported docs live in `documents/` and are analyzed **on demand** — they are not
 injected into every prompt, so a large SRS never bloats the system prompt.
 Review depth is bounded by `ANALYZE_MAX_TOKENS` (default 8192).
+
+---
+
+## Use as an MCP server (ruflo / Claude Desktop / Claude Code)
+
+The same agent is exposed as a standard **MCP server** over stdio, with five
+tools — `analyze_requirement`, `create_user_story`, `create_brd`,
+`review_requirement`, `ask_missing_questions` — each reusing the existing agent
+in-process (no duplicated prompt logic, no HTTP server required).
+
+```bash
+npm run mcp          # start the MCP server (stdio)
+npm run mcp:smoke    # verify all five tools
+```
+
+Full connection instructions for **ruflo**, **Claude Desktop**, and **Claude
+Code** are in **[MCP.md](MCP.md)**.
+
+---
+
+## BMAD workflow (Analysis phase — M1)
+
+A lightweight [BMAD](https://github.com/bmad-code-org/BMAD-METHOD)-style pipeline:
+each phase produces a Markdown **artifact** (living document) under
+`workspace/<project>/`, with a **human-in-the-loop gate** — run one phase, review
+or edit the artifact, then run the next. A phase is runnable only when its agent
+is active (BA is; PM / Architect / Dev activate when you create `agents/<id>/`).
+
+| Phase | Agent | Artifact | Status |
+| ----- | ----- | -------- | ------ |
+| Analysis | `ba` | `brief.md` | ✅ active |
+| Planning | `pm` | `prd.md` | ✅ active |
+| Solutioning | `architect` | `architecture.md` | ✅ active |
+| Implementation | `dev` | `stories.md` | create `agents/dev/` (M3) |
+
+Phases are declared in [`workflows/bmad.json`](workflows/bmad.json) (read from
+disk per call — editable without restart). Each phase runs its own agent
+(`agents/<id>/`, except BA at the project root) and reads the prior phase's
+artifact as input. BA skills powering Analysis: `project-brief`, `brainstorming`,
+`market-research`, `competitor-analysis`, `stakeholder-interview`,
+`success-metrics`.
+
+```bash
+# run the Analysis phase for a new project
+curl -s http://localhost:3000/api/workflows/run-phase \
+  -H "Content-Type: application/json" \
+  -d '{"project":"my-app","phase":"analysis","idea":"<your product idea>"}'
+
+curl http://localhost:3000/api/workflows/my-app/artifacts          # list artifacts
+curl http://localhost:3000/api/workflows/my-app/artifact/brief.md  # read brief
+```
 
 ---
 

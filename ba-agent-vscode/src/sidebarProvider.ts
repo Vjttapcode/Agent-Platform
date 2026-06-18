@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { sendChat, getHistory, resetHistory, describeError, type ChatMessage } from './api';
+import { log } from './log';
 
 /**
  * Renders the BA Agent chat as a Webview in the sidebar and is the single
@@ -22,6 +23,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
+    // The webview may be disposed and recreated; reset the readiness gate so a
+    // fresh 'ready' message re-opens it instead of resolving a stale promise.
+    this._resetReadyGate();
     this._view = webviewView;
     webviewView.webview.options = {
       enableScripts: true,
@@ -74,6 +78,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       const reply = await sendChat(text);
       this._post({ type: 'append', role: 'assistant', content: reply });
     } catch (err) {
+      log('sendMessage failed:', err);
       this._post({ type: 'error', message: describeError(err) });
     } finally {
       this._post({ type: 'thinking', on: false });
@@ -82,8 +87,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   /** Clear server-side memory and the webview. */
   public async newSession(): Promise<void> {
-    await resetHistory();
-    this._post({ type: 'history', items: [] as ChatMessage[] });
+    try {
+      await resetHistory();
+      this._post({ type: 'history', items: [] as ChatMessage[] });
+    } catch (err) {
+      log('newSession failed:', err);
+      this._post({ type: 'error', message: describeError(err) });
+    }
   }
 
   // -------------------------------------------------------------------------

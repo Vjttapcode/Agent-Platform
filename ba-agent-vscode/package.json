@@ -38,16 +38,47 @@
       ]
     },
     "commands": [
-      { "command": "baAgent.chat", "title": "Chat", "category": "BA" },
-      { "command": "baAgent.analyze", "title": "Analyze Requirement", "category": "BA" },
-      { "command": "baAgent.createUserStory", "title": "Create User Story", "category": "BA" },
-      { "command": "baAgent.generateBRD", "title": "Generate BRD", "category": "BA" },
-      { "command": "baAgent.review", "title": "Review Requirement", "category": "BA" },
-      { "command": "baAgent.sendSelection", "title": "Send Selected Text", "category": "BA" },
-      { "command": "baAgent.newSession", "title": "New Session (clear history)", "category": "BA" }
+      {
+        "command": "baAgent.chat",
+        "title": "Chat",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.analyze",
+        "title": "Analyze Requirement",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.createUserStory",
+        "title": "Create User Story",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.generateBRD",
+        "title": "Generate BRD",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.review",
+        "title": "Review Requirement",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.sendSelection",
+        "title": "Send Selected Text",
+        "category": "BA"
+      },
+      {
+        "command": "baAgent.newSession",
+        "title": "New Session (clear history)",
+        "category": "BA"
+      }
     ],
     "submenus": [
-      { "id": "baAgent.contextMenu", "label": "BA Agent" }
+      {
+        "id": "baAgent.contextMenu",
+        "label": "BA Agent"
+      }
     ],
     "menus": {
       "editor/context": [
@@ -58,14 +89,32 @@
         }
       ],
       "baAgent.contextMenu": [
-        { "command": "baAgent.analyze", "group": "1_ba@1" },
-        { "command": "baAgent.createUserStory", "group": "1_ba@2" },
-        { "command": "baAgent.generateBRD", "group": "1_ba@3" },
-        { "command": "baAgent.review", "group": "1_ba@4" },
-        { "command": "baAgent.sendSelection", "group": "2_ba@1" }
+        {
+          "command": "baAgent.analyze",
+          "group": "1_ba@1"
+        },
+        {
+          "command": "baAgent.createUserStory",
+          "group": "1_ba@2"
+        },
+        {
+          "command": "baAgent.generateBRD",
+          "group": "1_ba@3"
+        },
+        {
+          "command": "baAgent.review",
+          "group": "1_ba@4"
+        },
+        {
+          "command": "baAgent.sendSelection",
+          "group": "2_ba@1"
+        }
       ],
       "commandPalette": [
-        { "command": "baAgent.sendSelection", "when": "editorHasSelection" }
+        {
+          "command": "baAgent.sendSelection",
+          "when": "editorHasSelection"
+        }
       ]
     },
     "configuration": {
@@ -82,11 +131,16 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.10.5",
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.7.3"
+    "eslint": "^10.5.0",
+    "globals": "^17.6.0",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.61.1"
   }
 }
