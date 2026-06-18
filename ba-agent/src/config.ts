@@ -6,7 +6,13 @@
  * first; mcp-server.ts imports "./mcp-env" first), so values are populated.
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+// Project root (this file lives in <root>/src or <root>/dist).
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 function int(name: string, fallback: number): number {
   const v = Number(process.env[name]);
@@ -28,6 +34,10 @@ function list(name: string): string[] {
 export const config = {
   port: int('PORT', 3000),
   logLevel: str('LOG_LEVEL', 'info').toLowerCase() as LogLevel,
+
+  // Where runtime data (the SQLite DB) lives. Set DATA_DIR to a persistent path
+  // on a server (e.g. /var/lib/ba-agent) so redeploys never wipe sessions.
+  dataDir: str('DATA_DIR', path.join(ROOT, 'data')),
 
   provider: str('LLM_PROVIDER', 'anthropic').toLowerCase(),
   maxTokens: int('MAX_TOKENS', 4096),

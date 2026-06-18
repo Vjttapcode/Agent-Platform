@@ -32,7 +32,15 @@
       "agent": "dev",
       "output": "stories.md",
       "inputs": ["prd.md", "architecture.md"],
-      "instruction": "You are the BMAD Scrum Master / Dev. Shard the PRD and architecture into implementable stories with clear acceptance criteria and tasks. Output clean Markdown (this is expanded into per-story execution in a later milestone)."
+      "instruction": "You are the BMAD Dev. Shard the PRD and architecture into small, ordered, INVEST stories (US-###) with tasks (T-###.#) and acceptance criteria (AC-###), each traced to its requirement and architecture component. End with a build sequence. Output clean Markdown."
+    },
+    {
+      "id": "qa",
+      "label": "QA",
+      "agent": "tester",
+      "output": "test-plan.md",
+      "inputs": ["prd.md", "stories.md"],
+      "instruction": "You are the BMAD QA engineer. From the PRD and the stories, produce a test plan plus concrete test cases (TC-###, Given/When/Then) covering happy/alternate/error/edge paths and key NFRs, each traceable to an AC-###/US-###. End with a coverage summary. Output clean Markdown."
     }
   ]
 }

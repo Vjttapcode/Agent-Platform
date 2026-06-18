@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type ModelOption, type Msg } from '../api';
 
-export function Chat({ agentId }: { agentId: string }) {
+export function Chat({ sessionId, onChanged }: { sessionId: string; onChanged?: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -10,7 +10,6 @@ export function Chat({ agentId }: { agentId: string }) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.memory(agentId).then(setMsgs).catch(() => setMsgs([]));
     api
       .models()
       .then((d) => {
@@ -18,7 +17,12 @@ export function Chat({ agentId }: { agentId: string }) {
         setModel(d.default);
       })
       .catch(() => setModels([]));
-  }, [agentId]);
+  }, []);
+
+  // Reload history whenever the active session changes.
+  useEffect(() => {
+    api.history(sessionId).then(setMsgs).catch(() => setMsgs([]));
+  }, [sessionId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,8 +35,9 @@ export function Chat({ agentId }: { agentId: string }) {
     setMsgs((m) => [...m, { role: 'user', content: text }]);
     setBusy(true);
     try {
-      const res = await api.chat(text, model || undefined);
+      const res = await api.chat(text, model || undefined, sessionId);
       setMsgs((m) => [...m, { role: 'assistant', content: res.reply }]);
+      onChanged?.();
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: `⚠ ${(e as Error).message}` }]);
     } finally {

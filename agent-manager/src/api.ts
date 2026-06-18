@@ -29,6 +29,14 @@ export interface ModelOption {
   id: string;
   label: string;
 }
+export interface Session {
+  id: string;
+  title: string;
+  agent: string;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
 export interface Phase {
   id: string;
   label: string;
@@ -79,35 +87,66 @@ export const api = {
   models: (): Promise<{ models: ModelOption[]; default: string }> =>
     fetch('/api/models').then((r) => json(r)),
 
-  chat: (message: string, model?: string): Promise<{ reply: string }> =>
+  // --- Sessions ---
+  sessions: (): Promise<Session[]> => fetch('/api/sessions').then((r) => json<Session[]>(r)),
+
+  createSession: (title: string): Promise<Session> =>
+    fetch('/api/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    }).then((r) => json(r)),
+
+  renameSession: (id: string, title: string): Promise<{ ok: boolean }> =>
+    fetch(`/api/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    }).then((r) => json(r)),
+
+  deleteSession: (id: string): Promise<{ ok: boolean }> =>
+    fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) => json(r)),
+
+  // --- Chat (session-scoped) ---
+  history: (sessionId: string): Promise<Msg[]> =>
+    fetch(`/api/history?session=${encodeURIComponent(sessionId)}`).then((r) => json<Msg[]>(r)),
+
+  reset: (sessionId: string): Promise<{ ok: boolean }> =>
+    fetch('/api/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).then((r) => json(r)),
+
+  chat: (message: string, model: string | undefined, sessionId: string): Promise<{ reply: string }> =>
     fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, model }),
+      body: JSON.stringify({ message, model, sessionId }),
     }).then((r) => json(r)),
 
-  // --- BMAD workflow ---
-  workflow: (project: string): Promise<Workflow> =>
-    fetch(`/api/workflows/bmad?project=${encodeURIComponent(project)}`).then((r) => json(r)),
+  // --- BMAD workflow (session-scoped) ---
+  workflow: (sessionId: string): Promise<Workflow> =>
+    fetch(`/api/workflows/bmad?project=${encodeURIComponent(sessionId)}`).then((r) => json(r)),
 
-  wfArtifacts: (project: string): Promise<FileInfo[]> =>
-    fetch(`/api/workflows/${encodeURIComponent(project)}/artifacts`).then((r) => json<FileInfo[]>(r)),
+  wfArtifacts: (sessionId: string): Promise<FileInfo[]> =>
+    fetch(`/api/workflows/${encodeURIComponent(sessionId)}/artifacts`).then((r) => json<FileInfo[]>(r)),
 
-  wfArtifact: (project: string, name: string): Promise<{ name: string; content: string }> =>
-    fetch(`/api/workflows/${encodeURIComponent(project)}/artifact/${encodeURIComponent(name)}`).then((r) =>
-      json(r),
-    ),
+  wfArtifact: (sessionId: string, name: string): Promise<{ name: string; content: string }> =>
+    fetch(
+      `/api/workflows/${encodeURIComponent(sessionId)}/artifact/${encodeURIComponent(name)}`,
+    ).then((r) => json(r)),
 
   runPhase: (
-    project: string,
+    sessionId: string,
     phase: string,
     idea: string,
     model?: string,
-  ): Promise<{ project: string; phase: string; artifact: string; content: string }> =>
+  ): Promise<{ session: string; phase: string; artifact: string; content: string }> =>
     fetch('/api/workflows/run-phase', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project, phase, idea, model }),
+      body: JSON.stringify({ sessionId, phase, idea, model }),
     }).then((r) => json(r)),
 };
 

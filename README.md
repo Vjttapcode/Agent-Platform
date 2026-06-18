@@ -53,4 +53,13 @@ npm install && npm run compile   # then press F5 in VSCode
 - **Multi-agent ready** — BA lives at the `ba-agent` root; new agents are added
   by creating `ba-agent/agents/<id>/` (see `ba-agent/agents/README.md`).
 
+## Data & deploy
+
+- **Centralized store:** runtime data (sessions, chat, workflow artifacts) lives in
+  a single SQLite file at `DATA_DIR/app.db` (default `ba-agent/data/`). Prompts/
+  skills/knowledge/conventions stay as files in the repo.
+- **Deploy (Linux):** one Node process serves the API + web chat (`/`) + Agent
+  Manager (`/manager`). See **[ba-agent/deploy/README.md](ba-agent/deploy/README.md)**
+  (Ubuntu + systemd + `IP:port`, data in `/var/lib/ba-agent`).
+
 See each project's README for details.

@@ -1,20 +1,17 @@
 import { loadSystemPrompt, loadConventions, ROOT } from './prompt-loader';
 import { loadKnowledge } from './knowledge-loader';
 import { loadSkills } from './skill-loader';
-import { recentMessages, appendMessage, type ChatMessage } from './memory';
+import { recentMessages, appendMessage } from './memory';
 import { readDocument } from './documents';
 import { generate, activeModel, activeProvider, type LLMMessage } from './llm';
 import { config as env } from './config';
 
 const ANALYZE_MAX_TOKENS = env.analyzeMaxTokens;
 
-/** Persist one user→assistant exchange to conversation memory. */
-function persistTurn(userContent: string, reply: string): void {
-  const turn: ChatMessage[] = [
-    { role: 'user', content: userContent, ts: new Date().toISOString() },
-    { role: 'assistant', content: reply, ts: new Date().toISOString() },
-  ];
-  turn.forEach(appendMessage);
+/** Persist one user→assistant exchange to a session's conversation memory. */
+function persistTurn(sessionId: string, userContent: string, reply: string): void {
+  appendMessage(sessionId, { role: 'user', content: userContent, ts: new Date().toISOString() });
+  appendMessage(sessionId, { role: 'assistant', content: reply, ts: new Date().toISOString() });
 }
 
 const DEFAULT_SRS_TASK =
@@ -45,11 +42,15 @@ export interface ModelChoice {
   model?: string;
 }
 
-export async function chat(userMessage: string, choice: ModelChoice = {}): Promise<string> {
+export async function chat(
+  userMessage: string,
+  choice: ModelChoice = {},
+  sessionId = 'default',
+): Promise<string> {
   const system = buildSystemPrompt();
 
-  // Conversation memory → message list.
-  const messages: LLMMessage[] = recentMessages().map((m) => ({
+  // Conversation memory (this session) → message list.
+  const messages: LLMMessage[] = recentMessages(sessionId).map((m) => ({
     role: m.role,
     content: m.content,
   }));
@@ -57,7 +58,7 @@ export async function chat(userMessage: string, choice: ModelChoice = {}): Promi
 
   const reply = await generate(system, messages, { provider: choice.provider, model: choice.model });
 
-  persistTurn(userMessage, reply);
+  persistTurn(sessionId, userMessage, reply);
   return reply;
 }
 
@@ -96,6 +97,7 @@ export async function analyzeDocument(
   name: string,
   task?: string,
   choice: ModelChoice = {},
+  sessionId = 'default',
 ): Promise<string> {
   const doc = readDocument(name);
   if (!doc) throw new Error(`Document not found: ${name}. Import it first.`);
@@ -109,7 +111,7 @@ export async function analyzeDocument(
     maxTokens: ANALYZE_MAX_TOKENS,
   });
 
-  persistTurn(`📄 Analyzed document: ${name} (${doc.length.toLocaleString()} chars)`, reply);
+  persistTurn(sessionId, `📄 Analyzed document: ${name} (${doc.length.toLocaleString()} chars)`, reply);
   return reply;
 }
 

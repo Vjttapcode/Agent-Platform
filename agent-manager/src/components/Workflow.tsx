@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, slug, type Phase, type FileInfo, type ModelOption } from '../api';
+import { api, type Phase, type FileInfo, type ModelOption } from '../api';
 
-export function Workflow() {
-  const [project, setProject] = useState('');
+export function Workflow({ sessionId, onArtifactsChanged }: { sessionId: string; onArtifactsChanged?: () => void }) {
   const [idea, setIdea] = useState('');
   const [phases, setPhases] = useState<Phase[]>([]);
   const [artifacts, setArtifacts] = useState<FileInfo[]>([]);
@@ -16,36 +15,34 @@ export function Workflow() {
     api.models().then((d) => { setModels(d.models); setModel(d.default); }).catch(() => setModels([]));
   }, []);
 
-  const load = useCallback(async (name: string) => {
-    if (!name.trim()) {
-      setPhases([]);
-      setArtifacts([]);
-      return;
-    }
-    const s = slug(name);
+  const load = useCallback(async () => {
     try {
-      const [wf, arts] = await Promise.all([api.workflow(s), api.wfArtifacts(s)]);
+      const [wf, arts] = await Promise.all([api.workflow(sessionId), api.wfArtifacts(sessionId)]);
       setPhases(wf.phases);
       setArtifacts(arts);
     } catch (e) {
       setStatus(`⚠ ${(e as Error).message}`);
     }
-  }, []);
+  }, [sessionId]);
 
-  // Load definition once (project-independent phase shape) on mount.
   useEffect(() => {
-    api.workflow('').then((w) => setPhases(w.phases)).catch(() => {});
-  }, []);
+    setOpen(null);
+    setStatus('');
+    load();
+  }, [load]);
 
   const run = async (phase: Phase) => {
-    if (!project.trim()) { setStatus('⚠ Enter a project name first.'); return; }
-    if (phase.id === 'analysis' && !idea.trim()) { setStatus('⚠ Enter a product idea for Analysis.'); return; }
+    if (phase.id === 'analysis' && !idea.trim()) {
+      setStatus('⚠ Enter a product idea for Analysis.');
+      return;
+    }
     setBusy(phase.id);
     setStatus('');
     try {
-      const res = await api.runPhase(project, phase.id, idea, model || undefined);
+      const res = await api.runPhase(sessionId, phase.id, idea, model || undefined);
       setOpen({ name: res.artifact, content: res.content });
-      await load(project);
+      await load();
+      onArtifactsChanged?.();
       setStatus(`✅ ${phase.label} → ${res.artifact}`);
     } catch (e) {
       setStatus(`⚠ ${(e as Error).message}`);
@@ -56,8 +53,7 @@ export function Workflow() {
 
   const view = async (name: string) => {
     try {
-      const a = await api.wfArtifact(slug(project), name);
-      setOpen(a);
+      setOpen(await api.wfArtifact(sessionId, name));
     } catch (e) {
       setStatus(`⚠ ${(e as Error).message}`);
     }
@@ -70,20 +66,13 @@ export function Workflow() {
       <header className="mb-4">
         <h1 className="text-xl font-semibold">BMAD Workflow</h1>
         <p className="text-sm text-slate-500">
-          Run one phase, review the artifact, then run the next (human-in-the-loop).
+          Session <code className="rounded bg-slate-100 px-1">{sessionId}</code> · run a phase, review the artifact,
+          then run the next.
         </p>
       </header>
 
-      {/* Inputs */}
       <section className="mb-5 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <input
-            value={project}
-            onChange={(e) => setProject(e.target.value)}
-            onBlur={() => load(project)}
-            placeholder="Project name (e.g. my-app)"
-            className="flex-1 min-w-[12rem] rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none"
-          />
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
@@ -104,7 +93,6 @@ export function Workflow() {
         {status && <p className="text-sm text-slate-600">{status}</p>}
       </section>
 
-      {/* Phases */}
       <section className="mb-5 space-y-2">
         {phases.map((p) => {
           const inputsReady = p.inputs.every((i) => doneSet.has(i));
@@ -139,7 +127,6 @@ export function Workflow() {
         })}
       </section>
 
-      {/* Artifacts */}
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-slate-700">
           Artifacts <span className="font-normal text-slate-400">({artifacts.length})</span>

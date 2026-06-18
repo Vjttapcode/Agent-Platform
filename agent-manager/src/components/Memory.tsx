@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Msg } from '../api';
 
-export function Memory({ agentId }: { agentId: string }) {
+export function Memory({ sessionId, onChanged }: { sessionId: string; onChanged?: () => void }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -10,21 +10,22 @@ export function Memory({ agentId }: { agentId: string }) {
     setLoading(true);
     setError('');
     return api
-      .memory(agentId)
+      .history(sessionId)
       .then(setMsgs)
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
-  }, [agentId]);
+  }, [sessionId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   const clear = async () => {
-    if (!confirm('Clear conversation memory?')) return;
+    if (!confirm('Clear this session’s conversation memory?')) return;
     try {
-      await api.clearMemory(agentId);
+      await api.reset(sessionId);
       await load();
+      onChanged?.();
     } catch (e) {
       setError((e as Error).message);
     }

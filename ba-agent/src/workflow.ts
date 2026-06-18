@@ -1,17 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, loadMarkdownFile } from './prompt-loader';
+import { ROOT } from './prompt-loader';
 import { getAgent, isActive } from './agents';
 import { runSkill } from './agent';
 import { logger } from './logger';
+import { putArtifact, getArtifact, listArtifacts as storeListArtifacts, type ArtifactInfo } from './store';
 
 /**
  * BMAD workflow runner.
  *
- * Phases are declared in workflows/bmad.json (read from disk every call, so it
- * is editable without a restart). Each phase reuses the existing agent stack:
- * runSkill() composes the target agent's system prompt and calls the LLM, then
- * the result is written as a Markdown artifact under workspace/<project>/.
+ * Phases are declared in workflows/bmad.json (read from disk every call).
+ * Each phase reuses the agent stack via runSkill() and stores its Markdown
+ * artifact in the SQLite store, scoped by sessionId (a "project" == a session).
  * Human-in-the-loop: run one phase, review/edit the artifact, run the next.
  */
 
@@ -35,7 +35,7 @@ export function loadWorkflow(): WorkflowDef {
   return JSON.parse(fs.readFileSync(WORKFLOW_FILE, 'utf-8')) as WorkflowDef;
 }
 
-/** Slugify a project name into a safe folder name. */
+/** Slugify a project/session name into a safe id. */
 export function slug(name: string): string {
   return (
     name
@@ -46,35 +46,18 @@ export function slug(name: string): string {
   );
 }
 
-function workspaceDir(project: string): string {
-  return path.join(ROOT, 'workspace', slug(project));
+export function listArtifacts(sessionId: string): ArtifactInfo[] {
+  return storeListArtifacts(sessionId);
 }
 
-export interface FileInfo {
-  name: string;
-  bytes: number;
+export function readArtifact(sessionId: string, name: string): string | null {
+  return getArtifact(sessionId, path.basename(name));
 }
 
-export function listArtifacts(project: string): FileInfo[] {
-  const dir = workspaceDir(project);
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.toLowerCase().endsWith('.md'))
-    .sort()
-    .map((f) => ({ name: f, bytes: fs.statSync(path.join(dir, f)).size }));
-}
-
-export function readArtifact(project: string, name: string): string | null {
-  const file = path.join(workspaceDir(project), path.basename(name));
-  if (!fs.existsSync(file)) return null;
-  return loadMarkdownFile(file);
-}
-
-/** Phases annotated with runnable/done status for the current project. */
-export function describeWorkflow(project?: string) {
+/** Phases annotated with runnable/done status for the current session. */
+export function describeWorkflow(sessionId?: string) {
   const def = loadWorkflow();
-  const artifacts = project ? new Set(listArtifacts(project).map((a) => a.name)) : new Set<string>();
+  const done = sessionId ? new Set(listArtifacts(sessionId).map((a) => a.name)) : new Set<string>();
   return {
     name: def.name,
     description: def.description,
@@ -87,7 +70,7 @@ export function describeWorkflow(project?: string) {
         output: p.output,
         inputs: p.inputs,
         runnable: Boolean(agent && isActive(agent)),
-        done: artifacts.has(p.output),
+        done: done.has(p.output),
       };
     }),
   };
@@ -99,15 +82,15 @@ export interface RunOptions {
 }
 
 export interface RunResult {
-  project: string;
+  session: string;
   phase: string;
   artifact: string;
   content: string;
 }
 
-/** Run a single phase and write its artifact. */
+/** Run a single phase and store its artifact. */
 export async function runPhase(
-  project: string,
+  sessionId: string,
   phaseId: string,
   idea: string | undefined,
   opts: RunOptions = {},
@@ -125,15 +108,14 @@ export async function runPhase(
     );
   }
 
-  const dir = workspaceDir(project);
   const parts: string[] = [];
   if (idea && idea.trim()) parts.push(`## Product idea / seed input\n\n${idea.trim()}`);
   for (const input of phase.inputs) {
-    const file = path.join(dir, input);
-    if (!fs.existsSync(file)) {
+    const content = getArtifact(sessionId, input);
+    if (content === null) {
       throw new Error(`Missing input artifact "${input}". Run the previous phase first.`);
     }
-    parts.push(`## ${input}\n\n${fs.readFileSync(file, 'utf-8')}`);
+    parts.push(`## ${input}\n\n${content}`);
   }
   if (parts.length === 0) {
     throw new Error('Provide an "idea" to start the Analysis phase.');
@@ -145,10 +127,8 @@ export async function runPhase(
     model: opts.model,
   });
 
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  const header = `<!-- BMAD · ${phase.label} · project: ${slug(project)} -->\n\n`;
-  fs.writeFileSync(path.join(dir, phase.output), header + content, 'utf-8');
-  logger.info(`[workflow] ${slug(project)} · ${phase.id} → ${phase.output} (${content.length} chars)`);
+  putArtifact(sessionId, phase.output, content, phase.id);
+  logger.info(`[workflow] ${sessionId} · ${phase.id} → ${phase.output} (${content.length} chars)`);
 
-  return { project: slug(project), phase: phase.id, artifact: phase.output, content };
+  return { session: sessionId, phase: phase.id, artifact: phase.output, content };
 }

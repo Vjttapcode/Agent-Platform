@@ -1,0 +1,19 @@
+[Unit]
+Description=BA Agent API (+ web chat + Agent Manager UI)
+After=network.target
+
+[Service]
+Type=simple
+# Adjust to where you cloned the repo and the Linux user that runs it:
+User=agent
+WorkingDirectory=/opt/agent-platform/ba-agent
+EnvironmentFile=/etc/ba-agent.env
+# login shell so node/npm on PATH (apt, NodeSource or nvm) are found:
+ExecStart=/bin/bash -lc 'npm start'
+Restart=always
+RestartSec=3
+# Let the app write only where it needs to:
+ReadWritePaths=/var/lib/ba-agent
+
+[Install]
+WantedBy=multi-user.target

@@ -1,12 +1,21 @@
 import 'dotenv/config';
 import express, { Router, type Request, type Response } from 'express';
 import multer from 'multer';
+import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config';
 import { logger } from './logger';
 import { asyncHandler, withAgent, requestLogger, errorMiddleware } from './http';
 import { chat, analyzeDocument, agentInfo } from './agent';
 import { loadHistory, clearHistory, loadHistoryFrom, clearHistoryFrom } from './memory';
+import {
+  listSessions,
+  createSession,
+  getSession,
+  deleteSession,
+  renameSession,
+  ensureSession,
+} from './store';
 import { listSkills } from './skill-loader';
 import { listKnowledge } from './knowledge-loader';
 import { ROOT } from './prompt-loader';
@@ -14,13 +23,21 @@ import { hasApiKey, missingKeyMessage, availableModels, defaultModelId, resolveM
 import { docxBufferToMarkdown } from './docx';
 import { saveDocument, listDocuments } from './documents';
 import { listAgents, isActive, loadedFiles, sectionDocs, fileList } from './agents';
-import { describeWorkflow, runPhase, listArtifacts, readArtifact } from './workflow';
+import { describeWorkflow, runPhase, listArtifacts, readArtifact, slug } from './workflow';
 
 const app = express();
 
 app.use(requestLogger);
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(ROOT, 'public')));
+
+// Serve the built Agent Manager UI at /manager (same origin → no CORS/proxy).
+// Built with `npm run build` in ../agent-manager (base '/manager/').
+const managerDist = path.join(ROOT, '..', 'agent-manager', 'dist');
+if (fs.existsSync(managerDist)) {
+  app.use('/manager', express.static(managerDist));
+  logger.info('Serving Agent Manager UI at /manager');
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -46,14 +63,60 @@ api.get('/models', (_req: Request, res: Response) => {
   res.json({ models: availableModels(), default: defaultModelId() });
 });
 
-/** Full conversation history (for hydrating clients on load). */
-api.get('/history', (_req: Request, res: Response) => {
-  res.json(loadHistory());
+/** Full conversation history for a session (default: 'default'). */
+api.get('/history', (req: Request, res: Response) => {
+  res.json(loadHistory((req.query.session ?? 'default').toString()));
 });
 
-/** Reset the conversation memory. */
-api.post('/reset', (_req: Request, res: Response) => {
-  clearHistory();
+/** Reset a session's conversation memory. */
+api.post('/reset', (req: Request, res: Response) => {
+  clearHistory((req.body?.sessionId ?? 'default').toString());
+  res.json({ ok: true });
+});
+
+// --- Sessions ---------------------------------------------------------------
+
+/** List sessions (always ensures a 'default' exists). */
+api.get('/sessions', (_req: Request, res: Response) => {
+  ensureSession('default', 'Default');
+  res.json(listSessions());
+});
+
+/** Create a session. */
+api.post('/sessions', (req: Request, res: Response) => {
+  const title = (req.body?.title ?? '').toString().trim() || 'New session';
+  const agent = (req.body?.agent ?? 'ba').toString();
+  res.json(createSession(title, agent));
+});
+
+/** Get one session. */
+api.get('/sessions/:id', (req: Request, res: Response) => {
+  const s = getSession(req.params.id);
+  if (!s) {
+    res.status(404).json({ error: `Unknown session: ${req.params.id}` });
+    return;
+  }
+  res.json(s);
+});
+
+/** Rename a session. */
+api.patch('/sessions/:id', (req: Request, res: Response) => {
+  const title = (req.body?.title ?? '').toString().trim();
+  if (!title) {
+    res.status(400).json({ error: 'Field "title" is required.' });
+    return;
+  }
+  if (!getSession(req.params.id)) {
+    res.status(404).json({ error: `Unknown session: ${req.params.id}` });
+    return;
+  }
+  renameSession(req.params.id, title);
+  res.json({ ok: true });
+});
+
+/** Delete a session (cascades messages + artifacts). */
+api.delete('/sessions/:id', (req: Request, res: Response) => {
+  deleteSession(req.params.id);
   res.json({ ok: true });
 });
 
@@ -71,7 +134,8 @@ api.post(
       res.status(500).json({ error: missingKeyMessage() });
       return;
     }
-    res.json({ reply: await chat(message, choice ?? {}) });
+    const sessionId = (req.body?.sessionId ?? 'default').toString();
+    res.json({ reply: await chat(message, choice ?? {}, sessionId) });
   }),
 );
 
@@ -119,7 +183,8 @@ api.post(
       res.status(500).json({ error: missingKeyMessage() });
       return;
     }
-    res.json({ reply: await analyzeDocument(doc, task, choice ?? {}) });
+    const sessionId = (req.body?.sessionId ?? 'default').toString();
+    res.json({ reply: await analyzeDocument(doc, task, choice ?? {}, sessionId) });
   }),
 );
 
@@ -178,20 +243,22 @@ api.post(
 
 // --- BMAD workflow endpoints -----------------------------------------------
 
-/** Workflow definition with per-phase runnable/done status. */
+// A workflow "project" maps to a session: sessionId = explicit sessionId, else slug(project).
+
+/** Workflow definition with per-phase runnable/done status for a session. */
 api.get('/workflows/bmad', (req: Request, res: Response) => {
   const project = req.query.project?.toString();
-  res.json(describeWorkflow(project));
+  res.json(describeWorkflow(project ? slug(project) : undefined));
 });
 
-/** Artifacts produced for a project. */
+/** Artifacts produced for a session/project. */
 api.get('/workflows/:project/artifacts', (req: Request, res: Response) => {
-  res.json(listArtifacts(req.params.project));
+  res.json(listArtifacts(slug(req.params.project)));
 });
 
 /** Read one artifact's content. */
 api.get('/workflows/:project/artifact/:name', (req: Request, res: Response) => {
-  const content = readArtifact(req.params.project, req.params.name);
+  const content = readArtifact(slug(req.params.project), req.params.name);
   if (content === null) {
     res.status(404).json({ error: `Artifact not found: ${req.params.name}` });
     return;
@@ -199,23 +266,26 @@ api.get('/workflows/:project/artifact/:name', (req: Request, res: Response) => {
   res.json({ name: req.params.name, content });
 });
 
-/** Run one BMAD phase (writes its artifact). Human reviews, then runs the next. */
+/** Run one BMAD phase (stores its artifact). Human reviews, then runs the next. */
 api.post(
   '/workflows/run-phase',
   asyncHandler(async (req, res) => {
     const project = (req.body?.project ?? '').toString().trim();
+    const explicit = (req.body?.sessionId ?? '').toString().trim();
     const phase = (req.body?.phase ?? '').toString().trim();
     const idea = (req.body?.idea ?? '').toString();
-    if (!project || !phase) {
-      res.status(400).json({ error: 'Fields "project" and "phase" are required.' });
+    if ((!project && !explicit) || !phase) {
+      res.status(400).json({ error: 'Fields "project" (or "sessionId") and "phase" are required.' });
       return;
     }
+    const sessionId = explicit || slug(project);
+    ensureSession(sessionId, project || sessionId);
     const choice = resolveModel(req.body?.model);
     if (!choice && !hasApiKey()) {
       res.status(500).json({ error: missingKeyMessage() });
       return;
     }
-    res.json(await runPhase(project, phase, idea, choice ?? {}));
+    res.json(await runPhase(sessionId, phase, idea, choice ?? {}));
   }),
 );
 

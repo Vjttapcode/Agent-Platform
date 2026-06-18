@@ -12,3 +12,6 @@ samples/
 
 # BMAD workflow artifacts (per-project living documents)
 workspace/
+
+# Centralized data store (SQLite)
+data/

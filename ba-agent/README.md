@@ -254,7 +254,8 @@ is active (BA is; PM / Architect / Dev activate when you create `agents/<id>/`).
 | Analysis | `ba` | `brief.md` | ✅ active |
 | Planning | `pm` | `prd.md` | ✅ active |
 | Solutioning | `architect` | `architecture.md` | ✅ active |
-| Implementation | `dev` | `stories.md` | create `agents/dev/` (M3) |
+| Implementation | `dev` | `stories.md` | ✅ active |
+| QA | `tester` | `test-plan.md` | ✅ active |
 
 Phases are declared in [`workflows/bmad.json`](workflows/bmad.json) (read from
 disk per call — editable without restart). Each phase runs its own agent
